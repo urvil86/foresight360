@@ -13,6 +13,7 @@ import {
   FileText,
   Compass,
   LayoutDashboard,
+  BarChart3,
   ArrowRight,
 } from "lucide-react";
 
@@ -26,6 +27,16 @@ const pageContext: Record<
     placeholder: string;
   }
 > = {
+  "/performance-pulse": {
+    title: "Performance Pulse Assistant",
+    icon: BarChart3,
+    actions: [
+      { label: "Explain Q1 variance drivers", description: "Walk through the biggest gaps between actuals and forecast" },
+      { label: "Simulate a corrective action", description: "Run a what-if to close the $70M gap to annual target" },
+      { label: "Generate variance action brief", description: "Draft a summary for the HIV franchise lead" },
+    ],
+    placeholder: "Ask about variance drivers or simulate recovery actions...",
+  },
   "/dashboard": {
     title: "Dashboard Assistant",
     icon: LayoutDashboard,

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  BarChart3,
   Calendar,
   GitBranch,
   Activity,
@@ -25,6 +26,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/performance-pulse", label: "Performance Pulse", icon: BarChart3 },
   { href: "/event-modeler", label: "Event Modeler", icon: Calendar },
   { href: "/scenario-planner", label: "Scenario Planner", icon: GitBranch },
   { href: "/sensitivity-engine", label: "Sensitivity Engine", icon: Activity },
