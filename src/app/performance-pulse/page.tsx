@@ -14,6 +14,7 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
+  LabelList,
 } from "recharts";
 import { Lock, ArrowDown, AlertTriangle, ChevronDown, ChevronUp, Send } from "lucide-react";
 
@@ -41,15 +42,18 @@ interface DriverCard {
 }
 
 // ─── Waterfall data ───────────────────────────────────────────────────────────
+// Y axis scale-breaks at $580M. Endpoint bars float from 580 to their total
+// so deltas in the $3M–$8M range remain clearly visible.
+const Y_BREAK = 580;
 const WATERFALL_DATA = [
-  { label: "Q1\nForecast",     chartBase: 0,   chartValue: 612, color: C.gray,    isEndpoint: true  },
-  { label: "Rx Ramp\nShortfall", chartBase: 604, chartValue: 8,  color: C.red,    isEndpoint: false },
-  { label: "ESI Tier\nChange",   chartBase: 598, chartValue: 6,  color: C.red,    isEndpoint: false },
-  { label: "G2N\nErosion",       chartBase: 594, chartValue: 4,  color: C.red,    isEndpoint: false },
-  { label: "Stockout\nImpact",   chartBase: 591, chartValue: 3,  color: C.red,    isEndpoint: false },
-  { label: "Aetna\nWin",         chartBase: 591, chartValue: 4,  color: C.success, isEndpoint: false },
-  { label: "DTC\nLift",          chartBase: 595, chartValue: 3,  color: C.success, isEndpoint: false },
-  { label: "Q1\nActuals",        chartBase: 0,   chartValue: 598, color: C.red,   isEndpoint: true  },
+  { label: "Q1 Forecast",       chartBase: Y_BREAK, chartValue: 612 - Y_BREAK, total: 612, impact: 0,  color: C.gray,    isEndpoint: true  },
+  { label: "Rx Ramp Shortfall", chartBase: 604,     chartValue: 8,              total: 604, impact: -8, color: C.red,     isEndpoint: false },
+  { label: "ESI Tier Change",   chartBase: 598,     chartValue: 6,              total: 598, impact: -6, color: C.red,     isEndpoint: false },
+  { label: "G2N Erosion",       chartBase: 594,     chartValue: 4,              total: 594, impact: -4, color: C.red,     isEndpoint: false },
+  { label: "Stockout Impact",   chartBase: 591,     chartValue: 3,              total: 591, impact: -3, color: C.red,     isEndpoint: false },
+  { label: "Aetna Win",         chartBase: 591,     chartValue: 4,              total: 595, impact: +4, color: C.success, isEndpoint: false },
+  { label: "DTC Lift",          chartBase: 595,     chartValue: 3,              total: 598, impact: +3, color: C.success, isEndpoint: false },
+  { label: "Q1 Actuals",        chartBase: Y_BREAK, chartValue: 598 - Y_BREAK, total: 598, impact: 0,  color: C.red,     isEndpoint: true  },
 ];
 
 // ─── Driver cards ─────────────────────────────────────────────────────────────
@@ -157,8 +161,7 @@ function WaterfallTooltip({ active, payload, label }: {
 }) {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload;
-  const displayLabel = label?.replace(/\n/g, " ") ?? "";
-  const total = d.isEndpoint ? d.chartValue : d.chartBase + d.chartValue;
+  const displayLabel = label ?? "";
   return (
     <div
       style={{
@@ -172,10 +175,10 @@ function WaterfallTooltip({ active, payload, label }: {
       }}
     >
       <p style={{ margin: "0 0 4px 0", fontWeight: 700, color: C.navy }}>{displayLabel}</p>
-      <p style={{ margin: 0, color: d.color, fontWeight: 600 }}>${total}M</p>
+      <p style={{ margin: 0, color: d.color, fontWeight: 600 }}>${d.total}M</p>
       {!d.isEndpoint && (
         <p style={{ margin: "2px 0 0 0", color: C.gray, fontSize: "11px" }}>
-          Impact: {d.color === C.success ? "+" : "-"}${d.chartValue}M
+          Impact: {d.impact > 0 ? "+" : ""}${d.impact}M
         </p>
       )}
     </div>
@@ -712,52 +715,116 @@ export default function PerformancePulsePage() {
             </p>
           </div>
 
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart
-              data={WATERFALL_DATA}
-              margin={{ top: 8, right: 16, left: 0, bottom: 48 }}
-              barSize={38}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 10, fill: C.gray }}
-                axisLine={{ stroke: "#E5E7EB" }}
-                tickLine={false}
-                interval={0}
-                height={52}
-              />
-              <YAxis
-                domain={[580, 620]}
-                tick={{ fontSize: 11, fill: C.gray }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v: number) => `$${v}M`}
-              />
-              <Tooltip content={<WaterfallTooltip />} />
-              {/* invisible base bar */}
-              <Bar dataKey="chartBase" stackId="a" fill="transparent" />
-              {/* visible value bar with per-cell colors */}
-              <Bar dataKey="chartValue" stackId="a" radius={[3, 3, 0, 0]}>
-                {WATERFALL_DATA.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <div style={{ position: "relative" }}>
+            <ResponsiveContainer width="100%" height={340}>
+              <BarChart
+                data={WATERFALL_DATA}
+                margin={{ top: 28, right: 20, left: 8, bottom: 70 }}
+                barSize={36}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 10.5, fill: C.gray }}
+                  axisLine={{ stroke: "#E5E7EB" }}
+                  tickLine={false}
+                  interval={0}
+                  angle={-28}
+                  textAnchor="end"
+                  height={70}
+                />
+                <YAxis
+                  domain={[Y_BREAK, 618]}
+                  allowDataOverflow
+                  tick={{ fontSize: 11, fill: C.gray }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v: number) => `$${v}M`}
+                  ticks={[Y_BREAK, 590, 600, 610, 618]}
+                />
+                <Tooltip content={<WaterfallTooltip />} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
+                {/* invisible base bar */}
+                <Bar dataKey="chartBase" stackId="a" fill="transparent" />
+                {/* visible value bar with per-cell colors + value labels */}
+                <Bar dataKey="chartValue" stackId="a" radius={[3, 3, 0, 0]}>
+                  {WATERFALL_DATA.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                  <LabelList
+                    dataKey="impact"
+                    position="top"
+                    style={{ fontSize: 11, fontWeight: 600 }}
+                    content={(props: {
+                      x?: number | string;
+                      y?: number | string;
+                      width?: number | string;
+                      index?: number;
+                    }) => {
+                      const { x, y, width, index } = props;
+                      if (index === undefined) return null;
+                      const d = WATERFALL_DATA[index];
+                      const cx = Number(x ?? 0) + Number(width ?? 0) / 2;
+                      const cy = Number(y ?? 0) - 6;
+                      if (d.isEndpoint) {
+                        return (
+                          <text x={cx} y={cy} textAnchor="middle" fontSize={11} fontWeight={700} fill={C.navy}>
+                            ${d.total}M
+                          </text>
+                        );
+                      }
+                      const sign = d.impact > 0 ? "+" : "";
+                      return (
+                        <text x={cx} y={cy} textAnchor="middle" fontSize={10.5} fontWeight={600} fill={d.color}>
+                          {sign}${d.impact}M
+                        </text>
+                      );
+                    }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
 
-          {/* Legend */}
-          <div style={{ display: "flex", gap: "18px", marginTop: "4px", paddingLeft: "8px", flexWrap: "wrap" }}>
-            {[
-              { color: C.gray, label: "Endpoint / Baseline" },
-              { color: C.red, label: "Negative Driver" },
-              { color: C.success, label: "Positive Driver" },
-            ].map(({ color, label }) => (
-              <div key={label} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <div style={{ width: "10px", height: "10px", borderRadius: "2px", backgroundColor: color }} />
-                <span style={{ fontSize: "11px", color: C.gray }}>{label}</span>
-              </div>
-            ))}
+            {/* Scale-break indicator on Y axis */}
+            <div
+              style={{
+                position: "absolute",
+                left: 28,
+                bottom: 72,
+                width: "18px",
+                height: "14px",
+                pointerEvents: "none",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <svg width="18" height="14" viewBox="0 0 18 14">
+                {/* two short zigzag lines on the axis to indicate scale break */}
+                <path d="M2 4 L7 2 L11 6 L16 4" stroke="#FFFFFF" strokeWidth="3" fill="none" />
+                <path d="M2 10 L7 8 L11 12 L16 10" stroke="#FFFFFF" strokeWidth="3" fill="none" />
+                <path d="M2 4 L7 2 L11 6 L16 4" stroke={C.gray} strokeWidth="1.2" fill="none" />
+                <path d="M2 10 L7 8 L11 12 L16 10" stroke={C.gray} strokeWidth="1.2" fill="none" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Legend + scale note */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "4px", paddingLeft: "8px", flexWrap: "wrap", gap: "12px" }}>
+            <div style={{ display: "flex", gap: "18px", flexWrap: "wrap" }}>
+              {[
+                { color: C.gray, label: "Endpoint / Baseline" },
+                { color: C.red, label: "Negative Driver" },
+                { color: C.success, label: "Positive Driver" },
+              ].map(({ color, label }) => (
+                <div key={label} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <div style={{ width: "10px", height: "10px", borderRadius: "2px", backgroundColor: color }} />
+                  <span style={{ fontSize: "11px", color: C.gray }}>{label}</span>
+                </div>
+              ))}
+            </div>
+            <span style={{ fontSize: "10.5px", color: C.gray, fontStyle: "italic" }}>
+              Scale break: Y-axis starts at ${Y_BREAK}M to highlight driver detail
+            </span>
           </div>
         </div>
 
