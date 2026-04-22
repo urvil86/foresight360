@@ -1,1370 +1,533 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import DashboardLayout from "@/components/DashboardLayout";
+import { useState } from 'react';
 import {
-  BarChart,
-  Bar,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  LabelList,
-} from "recharts";
-import { Lock, ArrowDown, AlertTriangle, ChevronDown, ChevronUp, Send } from "lucide-react";
+  ComposedChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, BarChart, Bar, Cell, LabelList,
+} from 'recharts';
+import {
+  LayoutDashboard, Zap, GitBranch, Sliders, Radar,
+  BarChart2, FileText, Bot, Settings, Bell, ChevronRight,
+  TrendingUp, TrendingDown, AlertCircle, Send, Activity,
+} from 'lucide-react';
 
-// ─── Color palette ────────────────────────────────────────────────────────────
-const C = {
-  red: "#C80037",
-  gray: "#646569",
-  navy: "#1A1A2E",
-  bg: "#F5F5F5",
-  success: "#28A745",
-  warning: "#FFC107",
-  text: "#2D2D2D",
-};
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface DriverCard {
-  id: string;
-  name: string;
-  direction: "NEGATIVE" | "POSITIVE";
-  functions: string[];
-  magnitude: string;
-  pct: string;
-  rootCause: string;
-  status: "Identified" | "Action Planned" | "Mitigated";
-}
-
-// ─── Waterfall data ───────────────────────────────────────────────────────────
-// Y axis scale-breaks at $580M. Endpoint bars float from 580 to their total
-// so deltas in the $3M–$8M range remain clearly visible.
-const Y_BREAK = 580;
-const WATERFALL_DATA = [
-  { label: "Q1 Forecast",       chartBase: Y_BREAK, chartValue: 612 - Y_BREAK, total: 612, impact: 0,  color: C.gray,    isEndpoint: true  },
-  { label: "Rx Ramp Shortfall", chartBase: 604,     chartValue: 8,              total: 604, impact: -8, color: C.red,     isEndpoint: false },
-  { label: "ESI Tier Change",   chartBase: 598,     chartValue: 6,              total: 598, impact: -6, color: C.red,     isEndpoint: false },
-  { label: "G2N Erosion",       chartBase: 594,     chartValue: 4,              total: 594, impact: -4, color: C.red,     isEndpoint: false },
-  { label: "Stockout Impact",   chartBase: 591,     chartValue: 3,              total: 591, impact: -3, color: C.red,     isEndpoint: false },
-  { label: "Aetna Win",         chartBase: 591,     chartValue: 4,              total: 595, impact: +4, color: C.success, isEndpoint: false },
-  { label: "DTC Lift",          chartBase: 595,     chartValue: 3,              total: 598, impact: +3, color: C.success, isEndpoint: false },
-  { label: "Q1 Actuals",        chartBase: Y_BREAK, chartValue: 598 - Y_BREAK, total: 598, impact: 0,  color: C.red,     isEndpoint: true  },
+// ── Nav ──────────────────────────────────────────────────────────────────────
+const NAV = [
+  { icon: LayoutDashboard, label: 'Dashboard', href: '/' },
+  { icon: Activity, label: 'Actuals vs Forecast', active: true, href: '/performance-pulse' },
+  { icon: Zap, label: 'Event Modeler', href: '#' },
+  { icon: GitBranch, label: 'Scenario Planner', href: '#' },
+  { icon: Sliders, label: 'Sensitivity Engine', href: '#' },
+  { icon: Radar, label: 'CI Intelligence', href: '#' },
+  { icon: BarChart2, label: 'Consolidator', href: '#' },
+  { icon: FileText, label: 'Reports', href: '#' },
+  { icon: Bot, label: 'AI Assistant', href: '#' },
 ];
 
-// ─── Driver cards ─────────────────────────────────────────────────────────────
-const DRIVERS: DriverCard[] = [
-  {
-    id: "d1",
-    name: "Slower Rx Ramp — Treatment-Naive",
-    direction: "NEGATIVE",
-    functions: ["Marketing", "Sales / Field"],
-    magnitude: "-$8M",
-    pct: "-1.3%",
-    rootCause:
-      "Q1 HCP detailing fell 12% below plan in 3 territories. NRx starts in treatment-naive patients tracking 6% below model assumption.",
-    status: "Action Planned",
-  },
-  {
-    id: "d2",
-    name: "Express Scripts Tier Change",
-    direction: "NEGATIVE",
-    functions: ["Market Access"],
-    magnitude: "-$6M",
-    pct: "-1.0%",
-    rootCause:
-      "Jan 1 formulary update moved Biktarvy from Tier 1 to Tier 2 for ESI commercial lives. Patient cost share increased $15, impacting new starts.",
-    status: "Identified",
-  },
-  {
-    id: "d3",
-    name: "Higher Gross-to-Net Erosion",
-    direction: "NEGATIVE",
-    functions: ["Finance"],
-    magnitude: "-$4M",
-    pct: "-0.7%",
-    rootCause:
-      "Rebate accruals running 180bps above forecast assumption due to Medicaid mix shift and higher-than-expected 340B utilization.",
-    status: "Identified",
-  },
-  {
-    id: "d4",
-    name: "Southern Region Stockout (Feb)",
-    direction: "NEGATIVE",
-    functions: ["Supply Chain"],
-    magnitude: "-$3M",
-    pct: "-0.5%",
-    rootCause:
-      "Distribution center allocation gap in Atlanta hub led to 11-day stockout across 340 pharmacies in Feb. Recovery completed mid-March.",
-    status: "Mitigated",
-  },
-  {
-    id: "d5",
-    name: "Aetna Formulary Win",
-    direction: "POSITIVE",
-    functions: ["Market Access"],
-    magnitude: "+$4M",
-    pct: "+0.7%",
-    rootCause:
-      "Formulary placement secured 3 weeks ahead of modeled date. Covered lives onboarded faster than assumption.",
-    status: "Mitigated",
-  },
-  {
-    id: "d6",
-    name: "DTC Campaign Lift",
-    direction: "POSITIVE",
-    functions: ["Marketing"],
-    magnitude: "+$3M",
-    pct: "+0.5%",
-    rootCause:
-      "Q1 DTC campaign outperformed benchmark by 22%. Attributed NRx lift above model in 5 key DMAs.",
-    status: "Mitigated",
-  },
-];
-
-// ─── Path-to-recovery chart data ──────────────────────────────────────────────
+// ── Recovery chart data (cumulative monthly revenue, $M) ─────────────────────
+// Three lines:
+//   plan       — straight-line trajectory to $2.41B annual target
+//   actuals    — Q1 actual ($598M) + current run-rate projection ($2.34B)
+//   recovery   — projected path after what-if actions close the gap
 const RECOVERY_DATA = [
-  { month: "Jan", forecast: 195, actual: 195,  simulated: 195  },
-  { month: "Feb", forecast: 197, actual: 198,  simulated: 198  },
-  { month: "Mar", forecast: 200, actual: 205,  simulated: 205  },
-  { month: "Apr", forecast: 201, actual: 197,  simulated: 199  },
-  { month: "May", forecast: 202, actual: 196,  simulated: 200  },
-  { month: "Jun", forecast: 203, actual: 195,  simulated: 201  },
-  { month: "Jul", forecast: 204, actual: 194,  simulated: 202  },
-  { month: "Aug", forecast: 205, actual: 194,  simulated: 204  },
-  { month: "Sep", forecast: 206, actual: 193,  simulated: 205  },
-  { month: "Oct", forecast: 207, actual: null, simulated: 206  },
-  { month: "Nov", forecast: 208, actual: null, simulated: 207  },
-  { month: "Dec", forecast: 210, actual: null, simulated: 210  },
+  { month: 'Jan', plan: 201,  actuals: 199 },
+  { month: 'Feb', plan: 402,  actuals: 396 },
+  { month: 'Mar', plan: 603,  actuals: 598,  recovery: 598  },
+  { month: 'Apr', plan: 804,  actuals: 793,  recovery: 795  },
+  { month: 'May', plan: 1005, actuals: 988,  recovery: 994  },
+  { month: 'Jun', plan: 1206, actuals: 1183, recovery: 1197 },
+  { month: 'Jul', plan: 1407, actuals: 1378, recovery: 1403 },
+  { month: 'Aug', plan: 1608, actuals: 1573, recovery: 1612 },
+  { month: 'Sep', plan: 1809, actuals: 1768, recovery: 1824 },
+  { month: 'Oct', plan: 2010, actuals: 1963, recovery: 2031 },
+  { month: 'Nov', plan: 2211, actuals: 2158, recovery: 2226 },
+  { month: 'Dec', plan: 2410, actuals: 2340, recovery: 2408 },
 ];
 
-// ─── Shared label style ───────────────────────────────────────────────────────
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: "11px",
-  fontWeight: 600,
-  color: C.gray,
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  marginBottom: "5px",
+// ── Waterfall data ────────────────────────────────────────────────────────────
+// Each entry: spacer (transparent base) + bar (visible colored portion).
+// Running total: 612 − 8 − 6 − 4 − 3 + 4 + 3 = 598 ✓
+//
+// Negative bars sit at the top of the running total (spacer = total_after_step).
+// Positive bars sit at the bottom of their range (spacer = total_before_step).
+const WATERFALL_DATA = [
+  { name: 'Q1 Forecast', spacer: 0,   bar: 612, type: 'total',     label: '$612M' },
+  { name: 'Rx Ramp',     spacer: 604, bar: 8,   type: 'negative',  label: '−$8M'  },
+  { name: 'ES Tier',     spacer: 598, bar: 6,   type: 'negative',  label: '−$6M'  },
+  { name: 'G2N',         spacer: 594, bar: 4,   type: 'negative',  label: '−$4M'  },
+  { name: 'Stockout',    spacer: 591, bar: 3,   type: 'negative',  label: '−$3M'  },
+  { name: 'Aetna Win',   spacer: 591, bar: 4,   type: 'positive',  label: '+$4M'  },
+  { name: 'DTC Lift',    spacer: 595, bar: 3,   type: 'positive',  label: '+$3M'  },
+  { name: 'Q1 Actuals',  spacer: 0,   bar: 598, type: 'total-end', label: '$598M' },
+];
+
+function waterfallColor(type: string) {
+  if (type === 'positive') return '#28A745';
+  if (type === 'negative') return '#C80037';
+  if (type === 'total-end') return '#C80037';
+  return '#646569';
+}
+
+// ── Driver cards ──────────────────────────────────────────────────────────────
+const DRIVERS = [
+  {
+    title: 'Slower Rx Ramp — Treatment-Naive',
+    tag: 'Marketing / Sales', tagColor: '#C80037',
+    impact: '−$8M', impactDir: 'neg',
+    pct: '−1.3%',
+    cause: 'Q1 HCP detailing fell 12% below plan in 3 territories. NRx starts in treatment-naive patients tracking 6% below model assumption.',
+    status: 'Action Planned', statusColor: '#FFC107',
+  },
+  {
+    title: 'Express Scripts Tier Change',
+    tag: 'Market Access', tagColor: '#C80037',
+    impact: '−$6M', impactDir: 'neg',
+    pct: '−1.0%',
+    cause: 'Jan 1 formulary update moved Biktarvy from Tier 1 to Tier 2 for ESI commercial lives. Patient cost share increased $15, impacting new starts.',
+    status: 'Identified', statusColor: '#646569',
+  },
+  {
+    title: 'Higher Gross-to-Net Erosion',
+    tag: 'Finance', tagColor: '#C80037',
+    impact: '−$4M', impactDir: 'neg',
+    pct: '−0.7%',
+    cause: 'Rebate accruals came in 40bps higher than modeled due to payer mix shift toward Medicaid-managed care.',
+    status: 'Identified', statusColor: '#646569',
+  },
+  {
+    title: 'Southern Region Stockout (Feb)',
+    tag: 'Supply Chain', tagColor: '#C80037',
+    impact: '−$3M', impactDir: 'neg',
+    pct: '−0.5%',
+    cause: 'Distribution center shortage in Feb caused 8-day supply gap in TX/LA territories, resulting in lost scripts.',
+    status: 'Mitigated', statusColor: '#28A745',
+  },
+  {
+    title: 'Aetna Formulary Win',
+    tag: 'Market Access', tagColor: '#28A745',
+    impact: '+$4M', impactDir: 'pos',
+    pct: '+0.7%',
+    cause: 'Formulary placement secured 3 weeks ahead of modeled date. Covered lives onboarded faster than assumption.',
+    status: 'Mitigated', statusColor: '#28A745',
+  },
+  {
+    title: 'DTC Campaign Lift',
+    tag: 'Marketing', tagColor: '#28A745',
+    impact: '+$3M', impactDir: 'pos',
+    pct: '+0.5%',
+    cause: 'Q1 digital DTC campaign exceeded response rate targets by 18%. New-patient inquiry volume 14% above plan.',
+    status: 'Mitigated', statusColor: '#28A745',
+  },
+];
+
+// ── Prefab chat conversation ──────────────────────────────────────────────────
+const CHAT = [
+  {
+    role: 'user',
+    text: 'If we increase HCP detailing frequency by 20% in the underperforming Southern and Midwest territories for Q2–Q3, what happens to our full-year number?',
+  },
+  {
+    role: 'ai',
+    text: 'Increasing detailing frequency by 20% in Southern + Midwest territories is projected to recover 40–55% of the treatment-naive ramp gap.',
+    bullets: [
+      'Estimated recovery: +$3.2M to +$4.4M over Q2–Q3',
+      'Revised FY run rate: $2.37B (vs $2.34B current, vs $2.41B plan)',
+      'Remaining gap to forecast: $40M–$37M',
+      'Confidence: Medium — assumes rep capacity is available and call quality holds.',
+    ],
+    note: "This alone won't close the gap. Combining with a co-pay card for ESI Tier 2 patients could add another $2M–$3M.",
+    actions: ['Model This as Scenario', 'Add to Event Modeler', 'See Assumptions'],
+  },
+  {
+    role: 'user',
+    text: 'What if we also run a 90-day co-pay assistance program for patients on Express Scripts plans where Biktarvy moved to Tier 2?',
+  },
+  {
+    role: 'ai',
+    text: 'A 90-day co-pay card for ESI Tier 2 patients is modeled to offset 60–70% of the tier change impact by reducing patient abandonment at the pharmacy counter.',
+    bullets: [
+      'Estimated recovery: +$3.6M to +$4.2M over Q2–Q3',
+      'Combined with detailing increase: revised FY run rate moves to $2.40B–$2.41B',
+      'Gap to forecast: effectively closed at the midpoint estimate.',
+    ],
+    note: 'Key risk: Gross-to-net impact reduces net revenue by ~$1.1M. Finance should model the net-net.',
+    actions: ['Build Combined Scenario', 'Route to Finance for G2N Review', 'Generate Action Brief'],
+  },
+];
+
+const QUICK_WHATS = [
+  'What if we win the CVS formulary slot in Q3?',
+  'What if competitor launch is delayed 6 months?',
+  'What if we increase WAC by 3% in July?',
+  'What if Southern region stockout recurs in Q3?',
+];
+
+const ROLES = ['All', 'Marketing', 'Sales / Field', 'Market Access', 'Finance', 'Supply Chain'];
+
+// ── Recovery tooltip ──────────────────────────────────────────────────────────
+function RecoveryTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const fmt = (v: number) => `$${v.toLocaleString()}M`;
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', fontSize: 12 }}>
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>{label} 2026</div>
+      {payload.map((p: any) => (
+        <div key={p.dataKey} style={{ color: p.color, marginBottom: 2 }}>
+          {p.name}: <strong>{fmt(p.value)}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Waterfall tooltip ─────────────────────────────────────────────────────────
+function WaterfallTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const entry = WATERFALL_DATA.find(d => d.name === label);
+  if (!entry) return null;
+  const isTotal = entry.type === 'total' || entry.type === 'total-end';
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', fontSize: 12 }}>
+      <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
+      <div style={{ color: isTotal ? '#646569' : entry.type === 'positive' ? '#28A745' : '#C80037', fontWeight: 700 }}>
+        {entry.label}
+      </div>
+      {!isTotal && (
+        <div style={{ color: '#9ca3af', fontSize: 11, marginTop: 2 }}>
+          Running total: ${entry.spacer + entry.bar}M
+        </div>
+      )}
+    </div>
+  );
+}
+
+const cardStyle: React.CSSProperties = {
+  background: '#fff',
+  borderRadius: 10,
+  padding: '18px 20px',
+  boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
 };
 
-// ─── Custom waterfall tooltip ─────────────────────────────────────────────────
-function WaterfallTooltip({ active, payload, label }: {
-  active?: boolean;
-  payload?: Array<{ value: number; dataKey: string; payload: typeof WATERFALL_DATA[0] }>;
-  label?: string;
-}) {
-  if (!active || !payload?.length) return null;
-  const d = payload[0]?.payload;
-  const displayLabel = label ?? "";
-  return (
-    <div
-      style={{
-        backgroundColor: "#FFFFFF",
-        border: "1px solid #E5E7EB",
-        borderRadius: "8px",
-        padding: "10px 14px",
-        fontSize: "12px",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.10)",
-        minWidth: "140px",
-      }}
-    >
-      <p style={{ margin: "0 0 4px 0", fontWeight: 700, color: C.navy }}>{displayLabel}</p>
-      <p style={{ margin: 0, color: d.color, fontWeight: 600 }}>${d.total}M</p>
-      {!d.isEndpoint && (
-        <p style={{ margin: "2px 0 0 0", color: C.gray, fontSize: "11px" }}>
-          Impact: {d.impact > 0 ? "+" : ""}${d.impact}M
-        </p>
-      )}
-    </div>
-  );
-}
-
-// ─── Driver Card Component ────────────────────────────────────────────────────
-function DriverCardItem({
-  driver,
-  expanded,
-  onToggle,
-}: {
-  driver: DriverCard;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  const isPositive = driver.direction === "POSITIVE";
-  const statusColor =
-    driver.status === "Mitigated"
-      ? C.success
-      : driver.status === "Action Planned"
-      ? C.warning
-      : C.gray;
-  const statusBg =
-    driver.status === "Mitigated"
-      ? "#F0FFF4"
-      : driver.status === "Action Planned"
-      ? "#FFFBEB"
-      : "#F5F5F5";
+// ── Page ──────────────────────────────────────────────────────────────────────
+export default function PerformancePulse() {
+  const [selectedRole, setSelectedRole] = useState('All');
+  const [chatInput, setChatInput] = useState('');
 
   return (
-    <div
-      style={{
-        backgroundColor: "#FFFFFF",
-        border: "1px solid #E5E7EB",
-        borderRadius: "10px",
-        overflow: "hidden",
-        marginBottom: "10px",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-        transition: "box-shadow 0.2s",
-      }}
-    >
-      {/* Card header — always visible */}
-      <button
-        onClick={onToggle}
-        style={{
-          width: "100%",
-          background: "none",
-          border: "none",
-          padding: "14px 16px",
-          cursor: "pointer",
-          textAlign: "left",
-          display: "flex",
-          flexDirection: "column",
-          gap: "8px",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div style={{ flex: 1, marginRight: "12px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "5px" }}>
-              <span
-                style={{
-                  fontSize: "10px",
-                  fontWeight: 700,
-                  padding: "2px 8px",
-                  borderRadius: "20px",
-                  backgroundColor: isPositive ? "#F0FFF4" : "#FFF5F7",
-                  color: isPositive ? C.success : C.red,
-                  border: `1px solid ${isPositive ? "#C3E6CB" : "#FFC0C9"}`,
-                  letterSpacing: "0.06em",
-                }}
-              >
-                {driver.direction}
-              </span>
-              {driver.functions.map((fn) => (
-                <span
-                  key={fn}
-                  style={{
-                    fontSize: "10px",
-                    fontWeight: 600,
-                    padding: "2px 8px",
-                    borderRadius: "20px",
-                    backgroundColor: "#F0F4FF",
-                    color: "#3B52A0",
-                    border: "1px solid #C7D2FE",
-                  }}
-                >
-                  {fn}
-                </span>
-              ))}
-            </div>
-            <span style={{ fontSize: "13px", fontWeight: 700, color: C.navy }}>{driver.name}</span>
-          </div>
-          <div style={{ textAlign: "right", flexShrink: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-            <div>
-              <div style={{ fontSize: "14px", fontWeight: 800, color: isPositive ? C.success : C.red }}>
-                {driver.magnitude}
-              </div>
-              <div style={{ fontSize: "11px", color: C.gray, fontWeight: 600 }}>{driver.pct}</div>
-            </div>
-            <div style={{ color: C.gray, marginTop: "2px" }}>
-              {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </div>
-          </div>
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: 'Inter, system-ui, sans-serif' }}>
+
+      {/* ── Sidebar ───────────────────────────────── */}
+      <aside style={{ width: 240, background: '#1A1A2E', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+        <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ color: '#fff', fontWeight: 800, fontSize: 16, letterSpacing: 1.5 }}>FORESIGHT 360</div>
+          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 2 }}>by Chryselys</div>
         </div>
-      </button>
-
-      {/* Expanded detail */}
-      {expanded && (
-        <div
-          style={{
-            padding: "0 16px 16px 16px",
-            borderTop: "1px solid #F0F0F0",
-          }}
-        >
-          <p style={{ fontSize: "12px", color: C.gray, lineHeight: 1.6, margin: "12px 0 12px 0" }}>
-            {driver.rootCause}
-          </p>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px", flexWrap: "wrap" }}>
-            <span style={{ fontSize: "11px", fontWeight: 600, color: C.gray }}>Status:</span>
-            <span
-              style={{
-                fontSize: "11px",
-                fontWeight: 700,
-                padding: "3px 10px",
-                borderRadius: "20px",
-                backgroundColor: statusBg,
-                color: statusColor,
-                border: `1px solid ${statusColor}33`,
-              }}
-            >
-              {driver.status}
-            </span>
-          </div>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <button
-              style={{
-                fontSize: "12px",
-                fontWeight: 600,
-                padding: "6px 14px",
-                borderRadius: "6px",
-                cursor: "pointer",
-                border: "1.5px solid #3B52A0",
-                backgroundColor: "transparent",
-                color: "#3B52A0",
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#F0F4FF"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
-            >
-              View in Event Modeler
-            </button>
-            <button
-              style={{
-                fontSize: "12px",
-                fontWeight: 600,
-                padding: "6px 14px",
-                borderRadius: "6px",
-                cursor: "pointer",
-                border: "1.5px solid #3B52A0",
-                backgroundColor: "transparent",
-                color: "#3B52A0",
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#F0F4FF"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
-            >
-              Create Corrective Scenario
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
-export default function PerformancePulsePage() {
-  const [activeRole, setActiveRole] = useState<string>("All");
-  const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
-  const [whatIfInput, setWhatIfInput] = useState<string>("");
-  const [showSimResult] = useState<boolean>(true);
-
-  const roles = ["All", "Marketing", "Sales / Field", "Market Access", "Finance", "Supply Chain"];
-
-  const functionMatchMap: Record<string, string[]> = {
-    "Marketing": ["Marketing"],
-    "Sales / Field": ["Sales / Field"],
-    "Market Access": ["Market Access"],
-    "Finance": ["Finance"],
-    "Supply Chain": ["Supply Chain"],
-    "All": [],
-  };
-
-  const filteredDrivers =
-    activeRole === "All"
-      ? DRIVERS
-      : DRIVERS.filter((d) =>
-          d.functions.some((fn) => functionMatchMap[activeRole]?.includes(fn))
-        );
-
-  const toggleDriver = (id: string) => {
-    setExpandedDriver((prev) => (prev === id ? null : id));
-  };
-
-  return (
-    <DashboardLayout breadcrumb={["Performance Pulse", "Biktarvy", "Q1 2026"]}>
-
-      {/* ── Page Header + Role Indicator ── */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: "18px",
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              fontSize: "22px",
-              fontWeight: 700,
-              color: C.navy,
-              margin: "0 0 4px 0",
-              letterSpacing: "-0.01em",
-            }}
-          >
-            Performance Pulse
-          </h1>
-          <p style={{ fontSize: "13px", color: C.gray, margin: 0 }}>
-            Variance tracking, root cause attribution &amp; agentic recovery simulation — Biktarvy US
-          </p>
-        </div>
-
-        {/* Role indicator pill */}
-        <div style={{ position: "relative", display: "inline-block" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "7px",
-              padding: "7px 14px",
-              backgroundColor: "#FFFFFF",
-              border: "1.5px solid #E5E7EB",
-              borderRadius: "20px",
-              fontSize: "12px",
-              fontWeight: 600,
-              color: C.navy,
-              cursor: "default",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-              userSelect: "none",
-            }}
-            title="Your role determines which variance drivers and actions are surfaced by default."
-          >
-            <Lock size={12} color={C.gray} />
-            <span>Urvil Shah</span>
-            <span style={{ color: C.gray, fontWeight: 400 }}>|</span>
-            <span style={{ color: C.gray, fontWeight: 500 }}>Commercial Strategy</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Filters Row ── */}
-      <div
-        style={{
-          display: "flex",
-          gap: "16px",
-          alignItems: "flex-end",
-          backgroundColor: "#FFFFFF",
-          border: "1px solid #E5E7EB",
-          borderRadius: "10px",
-          padding: "14px 20px",
-          marginBottom: "16px",
-          flexWrap: "wrap",
-        }}
-      >
-        {/* Dropdowns */}
-        {[
-          { label: "Brand", value: "Biktarvy" },
-          { label: "Market", value: "United States" },
-          { label: "Period", value: "Q1 2026 — Actuals through March" },
-        ].map(({ label, value }) => (
-          <div key={label} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            <label style={labelStyle}>{label}</label>
-            <select
-              defaultValue={value}
-              style={{
-                padding: "7px 28px 7px 12px",
-                fontSize: "13px",
-                fontWeight: 500,
-                color: C.navy,
-                backgroundColor: "#FFFFFF",
-                border: "1.5px solid #E5E7EB",
-                borderRadius: "7px",
-                cursor: "pointer",
-                appearance: "auto",
-                minWidth: label === "Period" ? "240px" : "170px",
-                fontFamily: "inherit",
-              }}
-            >
-              <option>{value}</option>
-            </select>
-          </div>
-        ))}
-
-        {/* Divider */}
-        <div
-          style={{
-            width: "1px",
-            height: "44px",
-            backgroundColor: "#E5E7EB",
-            alignSelf: "flex-end",
-            marginBottom: "2px",
-          }}
-        />
-
-        {/* Role view toggle */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-          <label style={labelStyle}>Role View</label>
-          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-            {roles.map((role) => {
-              const isActive = activeRole === role;
-              return (
-                <button
-                  key={role}
-                  onClick={() => setActiveRole(role)}
-                  style={{
-                    padding: "6px 13px",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    borderRadius: "20px",
-                    cursor: "pointer",
-                    border: isActive ? "none" : "1.5px solid #D1D5DB",
-                    backgroundColor: isActive ? C.red : "transparent",
-                    color: isActive ? "#FFFFFF" : C.gray,
-                    transition: "all 0.15s",
-                    letterSpacing: "0.01em",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) (e.currentTarget as HTMLButtonElement).style.borderColor = "#9CA3AF";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) (e.currentTarget as HTMLButtonElement).style.borderColor = "#D1D5DB";
-                  }}
-                >
-                  {role}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* ── SECTION 2 — KPI Cards ── */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(5, 1fr)",
-          gap: "12px",
-          marginBottom: "20px",
-        }}
-      >
-        {/* Card 1 — Actual Revenue */}
-        <div
-          style={{
-            backgroundColor: "#FFFFFF",
-            border: "1px solid #E5E7EB",
-            borderRadius: "10px",
-            padding: "18px 16px",
-            boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-            transition: "transform 0.15s, box-shadow 0.15s",
-            cursor: "default",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
-            (e.currentTarget as HTMLDivElement).style.boxShadow = "0 6px 16px rgba(0,0,0,0.10)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
-            (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 4px rgba(0,0,0,0.05)";
-          }}
-        >
-          <p style={{ fontSize: "11px", fontWeight: 600, color: C.gray, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 10px 0" }}>
-            Actual Revenue (Q1)
-          </p>
-          <p style={{ fontSize: "26px", fontWeight: 800, color: C.navy, margin: "0 0 4px 0", letterSpacing: "-0.02em" }}>
-            $598M
-          </p>
-          <p style={{ fontSize: "11px", color: C.gray, margin: 0 }}>through March 31</p>
-        </div>
-
-        {/* Card 2 — Forecasted Revenue */}
-        <div
-          style={{
-            backgroundColor: "#FFFFFF",
-            border: "1px solid #E5E7EB",
-            borderRadius: "10px",
-            padding: "18px 16px",
-            boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-            transition: "transform 0.15s, box-shadow 0.15s",
-            cursor: "default",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
-            (e.currentTarget as HTMLDivElement).style.boxShadow = "0 6px 16px rgba(0,0,0,0.10)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
-            (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 4px rgba(0,0,0,0.05)";
-          }}
-        >
-          <p style={{ fontSize: "11px", fontWeight: 600, color: C.gray, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 10px 0" }}>
-            Forecasted Revenue (Q1)
-          </p>
-          <p style={{ fontSize: "26px", fontWeight: 800, color: C.navy, margin: "0 0 4px 0", letterSpacing: "-0.02em" }}>
-            $612M
-          </p>
-          <p style={{ fontSize: "11px", color: C.gray, margin: 0 }}>as of Q1 model lock</p>
-        </div>
-
-        {/* Card 3 — Variance */}
-        <div
-          style={{
-            backgroundColor: "#FFF5F7",
-            border: "1px solid #FFC0C9",
-            borderRadius: "10px",
-            padding: "18px 16px",
-            boxShadow: "0 1px 4px rgba(200,0,55,0.08)",
-            transition: "transform 0.15s, box-shadow 0.15s",
-            cursor: "default",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
-            (e.currentTarget as HTMLDivElement).style.boxShadow = "0 6px 16px rgba(200,0,55,0.14)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
-            (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 4px rgba(200,0,55,0.08)";
-          }}
-        >
-          <p style={{ fontSize: "11px", fontWeight: 600, color: C.red, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 10px 0" }}>
-            Variance
-          </p>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
-            <ArrowDown size={18} color={C.red} strokeWidth={2.5} />
-            <p style={{ fontSize: "26px", fontWeight: 800, color: C.red, margin: 0, letterSpacing: "-0.02em" }}>
-              -$14M
-            </p>
-          </div>
-          <p style={{ fontSize: "12px", color: C.red, fontWeight: 600, margin: 0 }}>−2.3% vs forecast</p>
-        </div>
-
-        {/* Card 4 — Run Rate */}
-        <div
-          style={{
-            backgroundColor: "#FFFFFF",
-            border: "1px solid #E5E7EB",
-            borderRadius: "10px",
-            padding: "18px 16px",
-            boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-            transition: "transform 0.15s, box-shadow 0.15s",
-            cursor: "default",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
-            (e.currentTarget as HTMLDivElement).style.boxShadow = "0 6px 16px rgba(0,0,0,0.10)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
-            (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 4px rgba(0,0,0,0.05)";
-          }}
-        >
-          <p style={{ fontSize: "11px", fontWeight: 600, color: C.gray, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 10px 0" }}>
-            Run Rate Forecast (FY)
-          </p>
-          <p style={{ fontSize: "26px", fontWeight: 800, color: C.navy, margin: "0 0 4px 0", letterSpacing: "-0.02em" }}>
-            $2.34B
-          </p>
-          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-            <AlertTriangle size={12} color={C.warning} />
-            <p style={{ fontSize: "11px", color: C.gray, margin: 0 }}>vs $2.41B plan</p>
-          </div>
-        </div>
-
-        {/* Card 5 — Gap to Close */}
-        <div
-          style={{
-            backgroundColor: "#FFF5F7",
-            border: "1px solid #FFC0C9",
-            borderRadius: "10px",
-            padding: "18px 16px",
-            boxShadow: "0 1px 4px rgba(200,0,55,0.08)",
-            transition: "transform 0.15s, box-shadow 0.15s",
-            cursor: "default",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
-            (e.currentTarget as HTMLDivElement).style.boxShadow = "0 6px 16px rgba(200,0,55,0.14)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
-            (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 4px rgba(200,0,55,0.08)";
-          }}
-        >
-          <p style={{ fontSize: "11px", fontWeight: 600, color: C.red, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 10px 0" }}>
-            Gap to Close
-          </p>
-          <p style={{ fontSize: "26px", fontWeight: 800, color: C.red, margin: "0 0 4px 0", letterSpacing: "-0.02em" }}>
-            $70M
-          </p>
-          <p style={{ fontSize: "11px", color: C.red, fontWeight: 600, margin: 0 }}>to hit annual target</p>
-        </div>
-      </div>
-
-      {/* ── SECTION 3 — Two Columns ── */}
-      <div style={{ display: "flex", gap: "16px", marginBottom: "20px", alignItems: "flex-start" }}>
-
-        {/* LEFT 55% — Waterfall Chart */}
-        <div
-          style={{
-            flex: "0 0 55%",
-            backgroundColor: "#FFFFFF",
-            border: "1px solid #E5E7EB",
-            borderRadius: "10px",
-            padding: "20px",
-            boxSizing: "border-box",
-            boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-          }}
-        >
-          <div style={{ marginBottom: "16px" }}>
-            <h2 style={{ fontSize: "14px", fontWeight: 700, color: C.navy, margin: "0 0 3px 0" }}>
-              Variance Waterfall
-            </h2>
-            <p style={{ fontSize: "12px", color: C.gray, margin: 0 }}>
-              Q1 Variance Walk: Forecast to Actuals — Biktarvy (US)
-            </p>
-          </div>
-
-          <div style={{ position: "relative" }}>
-            <ResponsiveContainer width="100%" height={340}>
-              <BarChart
-                data={WATERFALL_DATA}
-                margin={{ top: 28, right: 20, left: 8, bottom: 70 }}
-                barSize={36}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 10.5, fill: C.gray }}
-                  axisLine={{ stroke: "#E5E7EB" }}
-                  tickLine={false}
-                  interval={0}
-                  angle={-28}
-                  textAnchor="end"
-                  height={70}
-                />
-                <YAxis
-                  domain={[Y_BREAK, 618]}
-                  allowDataOverflow
-                  tick={{ fontSize: 11, fill: C.gray }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v: number) => `$${v}M`}
-                  ticks={[Y_BREAK, 590, 600, 610, 618]}
-                />
-                <Tooltip content={<WaterfallTooltip />} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
-                {/* invisible base bar */}
-                <Bar dataKey="chartBase" stackId="a" fill="transparent" />
-                {/* visible value bar with per-cell colors + value labels */}
-                <Bar dataKey="chartValue" stackId="a" radius={[3, 3, 0, 0]}>
-                  {WATERFALL_DATA.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                  <LabelList
-                    dataKey="impact"
-                    position="top"
-                    style={{ fontSize: 11, fontWeight: 600 }}
-                    content={(props: {
-                      x?: number | string;
-                      y?: number | string;
-                      width?: number | string;
-                      index?: number;
-                    }) => {
-                      const { x, y, width, index } = props;
-                      if (index === undefined) return null;
-                      const d = WATERFALL_DATA[index];
-                      const cx = Number(x ?? 0) + Number(width ?? 0) / 2;
-                      const cy = Number(y ?? 0) - 6;
-                      if (d.isEndpoint) {
-                        return (
-                          <text x={cx} y={cy} textAnchor="middle" fontSize={11} fontWeight={700} fill={C.navy}>
-                            ${d.total}M
-                          </text>
-                        );
-                      }
-                      const sign = d.impact > 0 ? "+" : "";
-                      return (
-                        <text x={cx} y={cy} textAnchor="middle" fontSize={10.5} fontWeight={600} fill={d.color}>
-                          {sign}${d.impact}M
-                        </text>
-                      );
-                    }}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-
-            {/* Scale-break indicator on Y axis */}
-            <div
-              style={{
-                position: "absolute",
-                left: 28,
-                bottom: 72,
-                width: "18px",
-                height: "14px",
-                pointerEvents: "none",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <svg width="18" height="14" viewBox="0 0 18 14">
-                {/* two short zigzag lines on the axis to indicate scale break */}
-                <path d="M2 4 L7 2 L11 6 L16 4" stroke="#FFFFFF" strokeWidth="3" fill="none" />
-                <path d="M2 10 L7 8 L11 12 L16 10" stroke="#FFFFFF" strokeWidth="3" fill="none" />
-                <path d="M2 4 L7 2 L11 6 L16 4" stroke={C.gray} strokeWidth="1.2" fill="none" />
-                <path d="M2 10 L7 8 L11 12 L16 10" stroke={C.gray} strokeWidth="1.2" fill="none" />
-              </svg>
-            </div>
-          </div>
-
-          {/* Legend + scale note */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "4px", paddingLeft: "8px", flexWrap: "wrap", gap: "12px" }}>
-            <div style={{ display: "flex", gap: "18px", flexWrap: "wrap" }}>
-              {[
-                { color: C.gray, label: "Endpoint / Baseline" },
-                { color: C.red, label: "Negative Driver" },
-                { color: C.success, label: "Positive Driver" },
-              ].map(({ color, label }) => (
-                <div key={label} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <div style={{ width: "10px", height: "10px", borderRadius: "2px", backgroundColor: color }} />
-                  <span style={{ fontSize: "11px", color: C.gray }}>{label}</span>
-                </div>
-              ))}
-            </div>
-            <span style={{ fontSize: "10.5px", color: C.gray, fontStyle: "italic" }}>
-              Scale break: Y-axis starts at ${Y_BREAK}M to highlight driver detail
-            </span>
-          </div>
-        </div>
-
-        {/* RIGHT 45% — Driver Cards */}
-        <div
-          style={{
-            flex: "1",
-            minWidth: 0,
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-            <div>
-              <h2 style={{ fontSize: "14px", fontWeight: 700, color: C.navy, margin: "0 0 2px 0" }}>
-                Driver Detail Cards
-              </h2>
-              <p style={{ fontSize: "12px", color: C.gray, margin: 0 }}>
-                {filteredDrivers.length} driver{filteredDrivers.length !== 1 ? "s" : ""} shown
-                {activeRole !== "All" ? ` — ${activeRole}` : ""}
-              </p>
-            </div>
-            {activeRole !== "All" && (
-              <button
-                onClick={() => setActiveRole("All")}
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  padding: "4px 10px",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  border: "1.5px solid #E5E7EB",
-                  backgroundColor: "transparent",
-                  color: C.gray,
-                }}
-              >
-                Show All
-              </button>
-            )}
-          </div>
-
-          {/* Scrollable cards */}
-          <div style={{ maxHeight: "360px", overflowY: "auto", paddingRight: "2px" }}>
-            {filteredDrivers.length === 0 ? (
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "32px",
-                  color: C.gray,
-                  fontSize: "13px",
-                  backgroundColor: "#FFFFFF",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: "10px",
-                }}
-              >
-                No drivers assigned to <strong>{activeRole}</strong> for this period.
-              </div>
-            ) : (
-              filteredDrivers.map((driver) => (
-                <DriverCardItem
-                  key={driver.id}
-                  driver={driver}
-                  expanded={expandedDriver === driver.id}
-                  onToggle={() => toggleDriver(driver.id)}
-                />
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── SECTION 4 — Agentic What-If Engine ── */}
-      <div
-        style={{
-          backgroundColor: "#FFFFFF",
-          border: "1px solid #E5E7EB",
-          borderTopWidth: "3px",
-          borderTopColor: C.red,
-          borderRadius: "10px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.07)",
-          overflow: "hidden",
-        }}
-      >
-        {/* Engine header */}
-        <div
-          style={{
-            padding: "18px 24px 14px 24px",
-            borderBottom: "1px solid #F0F0F0",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-          }}
-        >
+        <nav style={{ flex: 1, padding: '12px 0' }}>
+          {NAV.map(({ icon: Icon, label, active, href }) => (
+            <a key={label} href={href} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '10px 20px',
+              borderLeft: active ? '3px solid #C80037' : '3px solid transparent',
+              background: active ? 'rgba(200,0,55,0.12)' : 'transparent',
+              color: active ? '#fff' : 'rgba(255,255,255,0.55)',
+              fontSize: 13.5, fontWeight: active ? 600 : 400,
+              cursor: 'pointer', textDecoration: 'none',
+            }}>
+              <Icon size={16} />{label}
+            </a>
+          ))}
+        </nav>
+        <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#C80037', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700 }}>US</div>
           <div>
-            <h2 style={{ fontSize: "16px", fontWeight: 800, color: C.navy, margin: "0 0 4px 0", letterSpacing: "-0.01em" }}>
-              Close the Gap — What-If Simulator
-            </h2>
-            <p style={{ fontSize: "12px", color: C.gray, margin: 0 }}>
-              Explore which actions can recover the variance and get back to forecast
-            </p>
+            <div style={{ color: '#fff', fontSize: 12, fontWeight: 600 }}>Urvil Shah</div>
+            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>Gilead | US Market</div>
           </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              backgroundColor: "#FFF5F7",
-              border: "1px solid #FFC0C9",
-              borderRadius: "6px",
-              padding: "5px 12px",
-            }}
-          >
-            <div
-              style={{
-                width: "7px",
-                height: "7px",
-                borderRadius: "50%",
-                backgroundColor: C.success,
-                boxShadow: "0 0 0 2px #C3E6CB",
-              }}
-            />
-            <span style={{ fontSize: "11px", fontWeight: 700, color: C.red }}>Agentic Engine Active</span>
+          <Settings size={14} style={{ marginLeft: 'auto', color: 'rgba(255,255,255,0.3)' }} />
+        </div>
+      </aside>
+
+      {/* ── Main ──────────────────────────────────── */}
+      <main style={{ flex: 1, overflow: 'auto', background: '#F5F5F5' }}>
+
+        {/* Top bar */}
+        <div style={{ background: '#fff', padding: '14px 28px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#646569' }}>
+            <span>Dashboard</span><ChevronRight size={14} />
+            <span>Biktarvy</span><ChevronRight size={14} />
+            <span style={{ color: '#2D2D2D', fontWeight: 600 }}>Actuals vs Forecast</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ background: '#F5F5F5', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 12px', fontSize: 12, color: '#646569' }}>Q1 2026 — Actuals through March</div>
+            <Bell size={18} style={{ color: '#646569' }} />
           </div>
         </div>
 
-        {/* Engine body — split left/right */}
-        <div style={{ display: "flex", minHeight: "560px" }}>
+        <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-          {/* LEFT 65% — Chat interface */}
-          <div
-            style={{
-              flex: "0 0 65%",
-              borderRight: "1px solid #F0F0F0",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            {/* Conversation area */}
-            <div
-              style={{
-                flex: 1,
-                overflowY: "auto",
-                padding: "20px 24px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "16px",
-              }}
-            >
-              {showSimResult && (
-                <>
-                  {/* User message 1 */}
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <div
-                      style={{
-                        maxWidth: "75%",
-                        backgroundColor: "#F0F0F0",
-                        borderRadius: "12px 12px 2px 12px",
-                        padding: "12px 16px",
-                        fontSize: "13px",
-                        color: C.navy,
-                        lineHeight: 1.55,
-                      }}
-                    >
-                      If we increase HCP detailing frequency by 20% in the underperforming Southern and Midwest territories for Q2-Q3, what happens to our full-year number?
-                    </div>
-                  </div>
-
-                  {/* AI response 1 */}
-                  <div style={{ display: "flex", justifyContent: "flex-start" }}>
-                    <div
-                      style={{
-                        maxWidth: "85%",
-                        backgroundColor: "#FFFFFF",
-                        border: "1px solid #E5E7EB",
-                        borderLeft: `3px solid ${C.red}`,
-                        borderRadius: "2px 12px 12px 12px",
-                        padding: "14px 18px",
-                        fontSize: "13px",
-                        color: C.text,
-                        lineHeight: 1.65,
-                        boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-                      }}
-                    >
-                      <p style={{ margin: "0 0 10px 0" }}>
-                        Increasing detailing frequency by 20% in Southern + Midwest territories is projected to recover <strong>40–55%</strong> of the treatment-naive ramp gap.
-                      </p>
-                      <div
-                        style={{
-                          backgroundColor: "#F8FAFF",
-                          border: "1px solid #E0E7FF",
-                          borderRadius: "8px",
-                          padding: "10px 14px",
-                          marginBottom: "10px",
-                        }}
-                      >
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px" }}>
-                          {[
-                            { label: "Estimated recovery", value: "+$3.2M to +$4.4M" },
-                            { label: "Revised FY run rate", value: "$2.37B" },
-                            { label: "Remaining gap to forecast", value: "$40M–$37M" },
-                            { label: "Confidence", value: "Medium" },
-                          ].map(({ label, value }) => (
-                            <div key={label}>
-                              <div style={{ fontSize: "10px", color: C.gray, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
-                              <div style={{ fontSize: "13px", fontWeight: 700, color: C.navy }}>{value}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <p style={{ margin: "0 0 12px 0", fontSize: "12px", color: C.gray }}>
-                        This alone won&apos;t close the gap. Combining with a co-pay card enhancement for ESI Tier 2 patients could add another $2M–$3M.
-                      </p>
-                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                        {["Model This as Scenario", "Add to Event Modeler", "See Assumptions"].map((btn) => (
-                          <button
-                            key={btn}
-                            style={{
-                              fontSize: "11px",
-                              fontWeight: 600,
-                              padding: "5px 12px",
-                              borderRadius: "6px",
-                              cursor: "pointer",
-                              border: "1.5px solid #3B52A0",
-                              backgroundColor: "transparent",
-                              color: "#3B52A0",
-                              transition: "background 0.15s",
-                            }}
-                            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#F0F4FF"; }}
-                            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
-                          >
-                            {btn}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* User message 2 */}
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <div
-                      style={{
-                        maxWidth: "75%",
-                        backgroundColor: "#F0F0F0",
-                        borderRadius: "12px 12px 2px 12px",
-                        padding: "12px 16px",
-                        fontSize: "13px",
-                        color: C.navy,
-                        lineHeight: 1.55,
-                      }}
-                    >
-                      What if we also run a 90-day co-pay assistance program for patients on Express Scripts plans where Biktarvy moved to Tier 2?
-                    </div>
-                  </div>
-
-                  {/* AI response 2 */}
-                  <div style={{ display: "flex", justifyContent: "flex-start" }}>
-                    <div
-                      style={{
-                        maxWidth: "85%",
-                        backgroundColor: "#FFFFFF",
-                        border: "1px solid #E5E7EB",
-                        borderLeft: `3px solid ${C.red}`,
-                        borderRadius: "2px 12px 12px 12px",
-                        padding: "14px 18px",
-                        fontSize: "13px",
-                        color: C.text,
-                        lineHeight: 1.65,
-                        boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-                      }}
-                    >
-                      <p style={{ margin: "0 0 10px 0" }}>
-                        A 90-day co-pay card for ESI Tier 2 patients is modeled to offset <strong>60–70%</strong> of the tier change impact by reducing patient abandonment at the pharmacy counter.
-                      </p>
-                      <div
-                        style={{
-                          backgroundColor: "#F0FFF4",
-                          border: "1px solid #C3E6CB",
-                          borderRadius: "8px",
-                          padding: "10px 14px",
-                          marginBottom: "10px",
-                        }}
-                      >
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px" }}>
-                          {[
-                            { label: "Estimated recovery", value: "+$3.6M to +$4.2M" },
-                            { label: "Combined FY run rate", value: "$2.40B–$2.41B" },
-                            { label: "Gap to forecast", value: "Effectively closed" },
-                            { label: "G2N headwind", value: "-$1.1M net" },
-                          ].map(({ label, value }) => (
-                            <div key={label}>
-                              <div style={{ fontSize: "10px", color: C.gray, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
-                              <div style={{ fontSize: "13px", fontWeight: 700, color: C.navy }}>{value}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <p style={{ margin: "0 0 12px 0", fontSize: "12px", color: "#92400E", backgroundColor: "#FFFBEB", border: "1px solid #FDE68A", padding: "8px 12px", borderRadius: "6px" }}>
-                        <strong>Key risk:</strong> Gross-to-net impact of the co-pay program reduces net revenue by an estimated $1.1M. Finance should model the net-net.
-                      </p>
-                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                        {["Build Combined Scenario", "Route to Finance for G2N Review", "Generate Action Brief"].map((btn) => (
-                          <button
-                            key={btn}
-                            style={{
-                              fontSize: "11px",
-                              fontWeight: 600,
-                              padding: "5px 12px",
-                              borderRadius: "6px",
-                              cursor: "pointer",
-                              border: "1.5px solid #3B52A0",
-                              backgroundColor: "transparent",
-                              color: "#3B52A0",
-                              transition: "background 0.15s",
-                            }}
-                            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#F0F4FF"; }}
-                            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
-                          >
-                            {btn}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
+          {/* ── Page header + filters ──────────────── */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div>
+                <h1 style={{ fontSize: 20, fontWeight: 800, color: '#2D2D2D', margin: 0 }}>Actuals vs Forecast — Variance Drivers</h1>
+                <p style={{ fontSize: 13, color: '#646569', marginTop: 3 }}>Track performance gaps and simulate actions to close them</p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#646569', background: '#F5F5F5', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 10px' }}>
+                <span style={{ fontWeight: 600, color: '#2D2D2D' }}>Urvil Shah</span>
+                <span>| Commercial Strategy</span>
+              </div>
             </div>
 
-            {/* Input bar */}
-            <div
-              style={{
-                padding: "14px 20px",
-                borderTop: "1px solid #F0F0F0",
-                backgroundColor: "#FAFAFA",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  backgroundColor: "#FFFFFF",
-                  border: "1.5px solid #E5E7EB",
-                  borderRadius: "8px",
-                  padding: "8px 12px",
-                  marginBottom: "10px",
-                }}
-              >
-                <input
-                  value={whatIfInput}
-                  onChange={(e) => setWhatIfInput(e.target.value)}
-                  placeholder="Ask: 'If we do X, where do we land?'"
-                  style={{
-                    flex: 1,
-                    border: "none",
-                    outline: "none",
-                    fontSize: "13px",
-                    color: C.navy,
-                    backgroundColor: "transparent",
-                    fontFamily: "inherit",
-                  }}
-                />
+            {/* Filters + role pills */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              {['Biktarvy', 'United States', 'Q1 2026'].map(f => (
+                <div key={f} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 12px', fontSize: 12, color: '#646569', cursor: 'pointer' }}>{f} ▾</div>
+              ))}
+              <div style={{ width: 1, height: 20, background: '#e5e7eb', margin: '0 4px' }} />
+              {ROLES.map(r => (
                 <button
+                  key={r}
+                  onClick={() => setSelectedRole(r)}
                   style={{
-                    padding: "6px 14px",
-                    backgroundColor: C.red,
-                    color: "#FFFFFF",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    fontSize: "12px",
-                    fontWeight: 600,
+                    background: selectedRole === r ? '#C80037' : '#fff',
+                    color: selectedRole === r ? '#fff' : '#646569',
+                    border: `1px solid ${selectedRole === r ? '#C80037' : '#e5e7eb'}`,
+                    borderRadius: 16, padding: '4px 12px', fontSize: 12, fontWeight: selectedRole === r ? 600 : 400, cursor: 'pointer',
                   }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#A8002E"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = C.red; }}
-                >
-                  <Send size={13} />
-                  Run
-                </button>
+                >{r}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── KPI Cards ─────────────────────────── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
+            <div style={cardStyle}>
+              <div style={labelSt}>Actual Revenue (Q1)</div>
+              <div style={valueSt}>$598M</div>
+              <div style={{ fontSize: 11, color: '#646569', marginTop: 3 }}>through March 31</div>
+            </div>
+            <div style={cardStyle}>
+              <div style={labelSt}>Forecasted Revenue (Q1)</div>
+              <div style={valueSt}>$612M</div>
+              <div style={{ fontSize: 11, color: '#646569', marginTop: 3 }}>original plan</div>
+            </div>
+            <div style={cardStyle}>
+              <div style={labelSt}>Variance</div>
+              <div style={{ ...valueSt, color: '#C80037', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <TrendingDown size={20} />−$14M
+              </div>
+              <div style={{ fontSize: 11, color: '#C80037', marginTop: 3, fontWeight: 500 }}>−2.3% vs plan</div>
+            </div>
+            <div style={cardStyle}>
+              <div style={labelSt}>Run Rate Forecast (FY)</div>
+              <div style={{ ...valueSt, fontSize: 22 }}>$2.34B</div>
+              <div style={{ fontSize: 11, color: '#FFC107', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 500 }}>
+                <AlertCircle size={12} />vs $2.41B plan
+              </div>
+            </div>
+            <div style={{ ...cardStyle, borderTop: '3px solid #C80037' }}>
+              <div style={labelSt}>Gap to Close</div>
+              <div style={{ ...valueSt, color: '#C80037' }}>$70M</div>
+              <div style={{ fontSize: 11, color: '#646569', marginTop: 3 }}>to hit annual target</div>
+            </div>
+          </div>
+
+          {/* ── TOP: Recovery chart (left) + What-If Simulator (right) ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '55% 45%', gap: 16 }}>
+
+            {/* Path to Forecast Recovery */}
+            <div style={cardStyle}>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: '#2D2D2D' }}>Path to Forecast Recovery</div>
+                <div style={{ fontSize: 12, color: '#646569', marginTop: 2 }}>Cumulative revenue through Dec 2026 — three paths</div>
+              </div>
+              <ResponsiveContainer width="100%" height={270}>
+                <ComposedChart data={RECOVERY_DATA} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#646569' }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    domain={[0, 2600]}
+                    tick={{ fontSize: 11, fill: '#646569' }}
+                    axisLine={false} tickLine={false}
+                    tickFormatter={v => `$${(v / 1000).toFixed(1)}B`}
+                  />
+                  <Tooltip content={<RecoveryTooltip />} />
+                  <Line type="monotone" dataKey="plan" stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 3" dot={false} name="Annual Plan" />
+                  <Line type="monotone" dataKey="actuals" stroke="#C80037" strokeWidth={2.5} dot={(p) => p.index <= 2 ? <circle key={p.index} cx={p.cx} cy={p.cy} r={3} fill="#C80037" /> : <g key={p.index} />} name="Actuals / Trajectory" />
+                  <Line type="monotone" dataKey="recovery" stroke="#28A745" strokeWidth={2.5} strokeDasharray="1 0" dot={false} name="Recovery Path" />
+                </ComposedChart>
+              </ResponsiveContainer>
+              <div style={{ display: 'flex', gap: 18, marginTop: 10, flexWrap: 'wrap' }}>
+                {[
+                  { color: '#9ca3af', dash: true, label: 'Annual Plan ($2.41B)' },
+                  { color: '#C80037', dash: false, label: 'Actuals / Trajectory' },
+                  { color: '#28A745', dash: false, label: 'Recovery Path' },
+                ].map(l => (
+                  <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <svg width={22} height={10}>
+                      <line x1={0} y1={5} x2={22} y2={5} stroke={l.color} strokeWidth={2} strokeDasharray={l.dash ? '5 3' : undefined} />
+                    </svg>
+                    <span style={{ fontSize: 11, color: '#646569' }}>{l.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* What-If Simulator */}
+            <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: '#2D2D2D' }}>What-If Simulator</div>
+                <div style={{ fontSize: 12, color: '#646569', marginTop: 2 }}>Explore which actions can recover the variance</div>
               </div>
 
-              {/* Quick What-If pills */}
-              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                {[
-                  { label: "What if we win CVS formulary in Q3?", custom: false },
-                  { label: "What if competitor launch delays 6 months?", custom: false },
-                  { label: "What if we increase WAC by 3% in July?", custom: false },
-                  { label: "What if Southern stockout recurs in Q3?", custom: false },
-                  { label: "+ Custom What-If", custom: true },
-                ].map(({ label, custom }) => (
-                  <button
-                    key={label}
-                    onClick={() => !custom && setWhatIfInput(label)}
-                    style={{
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      padding: "5px 12px",
-                      borderRadius: "20px",
-                      cursor: "pointer",
-                      border: custom ? `1.5px solid ${C.red}` : "1.5px solid #D1D5DB",
-                      backgroundColor: "transparent",
-                      color: custom ? C.red : C.gray,
-                      transition: "all 0.15s",
-                    }}
-                    onMouseEnter={(e) => {
-                      const b = e.currentTarget as HTMLButtonElement;
-                      b.style.backgroundColor = custom ? "#FFF5F7" : "#F5F5F5";
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent";
-                    }}
-                  >
-                    {label}
-                  </button>
+              {/* Chat history */}
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 310, paddingRight: 4 }}>
+                {CHAT.map((msg, i) => (
+                  <div key={i} style={msg.role === 'user' ? {
+                    alignSelf: 'flex-end',
+                    background: '#F5F5F5',
+                    borderRadius: 10,
+                    padding: '8px 12px',
+                    fontSize: 12,
+                    color: '#2D2D2D',
+                    maxWidth: '85%',
+                  } : {
+                    borderLeft: '3px solid #C80037',
+                    background: '#fff',
+                    borderRadius: '0 8px 8px 0',
+                    padding: '10px 12px',
+                    fontSize: 12,
+                    color: '#2D2D2D',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                  }}>
+                    {msg.role === 'user' ? (
+                      <span>{msg.text}</span>
+                    ) : (
+                      <>
+                        <p style={{ margin: '0 0 6px', lineHeight: 1.5 }}>{msg.text}</p>
+                        <ul style={{ margin: '0 0 6px', paddingLeft: 16 }}>
+                          {msg.bullets?.map((b, j) => <li key={j} style={{ marginBottom: 2, lineHeight: 1.4 }}>{b}</li>)}
+                        </ul>
+                        {msg.note && <p style={{ margin: '4px 0 8px', color: '#646569', fontStyle: 'italic', lineHeight: 1.4 }}>{msg.note}</p>}
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {msg.actions?.map(a => (
+                            <button key={a} style={{ background: 'rgba(200,0,55,0.07)', color: '#C80037', border: '1px solid rgba(200,0,55,0.2)', borderRadius: 4, padding: '3px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>{a}</button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Quick what-ifs */}
+              <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {QUICK_WHATS.map(q => (
+                  <button key={q} onClick={() => setChatInput(q)} style={{ background: '#F5F5F5', color: '#646569', border: '1px solid #e5e7eb', borderRadius: 14, padding: '4px 10px', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>{q}</button>
+                ))}
+              </div>
+
+              {/* Input */}
+              <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  placeholder="Ask: 'If we do X, where do we land?'"
+                  style={{ flex: 1, border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 12px', fontSize: 12, outline: 'none', color: '#2D2D2D' }}
+                />
+                <button style={{ background: '#C80037', border: 'none', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                  <Send size={14} color="#fff" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ── BOTTOM: Variance Waterfall (left) + Driver Cards (right) ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '55% 45%', gap: 16 }}>
+
+            {/* Variance Waterfall */}
+            <div style={cardStyle}>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: '#2D2D2D' }}>Q1 Variance Walk: Forecast to Actuals — Biktarvy (US)</div>
+                <div style={{ fontSize: 12, color: '#646569', marginTop: 2 }}>Bridge from Q1 plan to Q1 actuals ($M)</div>
+              </div>
+              <ResponsiveContainer width="100%" height={270}>
+                {/*
+                  Floating bar technique: each category has a transparent "spacer" bar
+                  stacked below the visible colored bar, creating the waterfall effect.
+                  Y-axis domain [585, 618] clips the invisible spacer portions.
+                */}
+                <BarChart data={WATERFALL_DATA} margin={{ top: 20, right: 12, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#646569' }} axisLine={false} tickLine={false} />
+                  <YAxis domain={[585, 618]} tick={{ fontSize: 10, fill: '#646569' }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}M`} />
+                  <Tooltip content={<WaterfallTooltip />} />
+                  {/* Invisible spacer — pushes visible bar to correct Y position */}
+                  <Bar dataKey="spacer" stackId="a" fill="transparent" />
+                  {/* Visible colored bar */}
+                  <Bar dataKey="bar" stackId="a" radius={[3, 3, 0, 0]}>
+                    {WATERFALL_DATA.map((entry, i) => (
+                      <Cell key={i} fill={waterfallColor(entry.type)} />
+                    ))}
+                    <LabelList dataKey="label" position="top" style={{ fontSize: 10, fill: '#2D2D2D', fontWeight: 600 }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+
+              {/* Legend */}
+              <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+                {[['#646569', 'Total'], ['#C80037', 'Negative driver'], ['#28A745', 'Positive offset']].map(([c, l]) => (
+                  <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <div style={{ width: 10, height: 10, background: c, borderRadius: 2 }} />
+                    <span style={{ fontSize: 11, color: '#646569' }}>{l}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Driver Detail Cards */}
+            <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: '#2D2D2D', marginBottom: 14 }}>Driver Detail</div>
+              <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 320 }}>
+                {DRIVERS.map((d, i) => (
+                  <div key={i} style={{
+                    border: `1px solid ${d.impactDir === 'neg' ? 'rgba(200,0,55,0.15)' : 'rgba(40,167,69,0.15)'}`,
+                    borderLeft: `3px solid ${d.impactDir === 'neg' ? '#C80037' : '#28A745'}`,
+                    borderRadius: '0 8px 8px 0',
+                    padding: '10px 12px',
+                    background: '#fff',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#2D2D2D', lineHeight: 1.3, flex: 1, marginRight: 8 }}>{d.title}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: d.impactDir === 'neg' ? '#C80037' : '#28A745', flexShrink: 0 }}>
+                        {d.impact}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <span style={{ fontSize: 11, background: `${d.tagColor}15`, color: d.tagColor, borderRadius: 4, padding: '2px 7px', fontWeight: 500 }}>{d.tag}</span>
+                      <span style={{ fontSize: 11, background: `${d.statusColor}20`, color: d.statusColor, borderRadius: 4, padding: '2px 7px', fontWeight: 500 }}>{d.status}</span>
+                    </div>
+                    <p style={{ fontSize: 11, color: '#646569', lineHeight: 1.5, margin: '0 0 6px' }}>{d.cause}</p>
+                    <button style={{ fontSize: 11, color: '#C80037', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 500 }}>
+                      {d.impactDir === 'neg' ? 'Create Corrective Scenario →' : 'View in Event Modeler →'}
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* RIGHT 35% — Recovery chart */}
-          <div
-            style={{
-              flex: 1,
-              padding: "20px 20px 16px 20px",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <div style={{ marginBottom: "14px" }}>
-              <h3 style={{ fontSize: "13px", fontWeight: 700, color: C.navy, margin: "0 0 2px 0" }}>
-                Path to Forecast Recovery
-              </h3>
-              <p style={{ fontSize: "11px", color: C.gray, margin: 0 }}>
-                Monthly revenue trajectory — Biktarvy US, FY 2026 ($M)
-              </p>
-            </div>
-
-            <div style={{ flex: 1, minHeight: 0 }}>
-              <ResponsiveContainer width="100%" height={340}>
-                <LineChart
-                  data={RECOVERY_DATA}
-                  margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" />
-                  <XAxis
-                    dataKey="month"
-                    tick={{ fontSize: 10, fill: C.gray }}
-                    axisLine={{ stroke: "#E5E7EB" }}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    domain={[185, 215]}
-                    tick={{ fontSize: 10, fill: C.gray }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(v: number) => `$${v}M`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#FFFFFF",
-                      border: "1px solid #E5E7EB",
-                      borderRadius: "8px",
-                      fontSize: "11px",
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-                    }}
-                    formatter={(value, name) => {
-                      const labels: Record<string, string> = {
-                        forecast: "Original Forecast",
-                        actual: "Current Trajectory",
-                        simulated: "Simulated Recovery",
-                      };
-                      return [value ? `$${value}M` : "—", labels[name as string] ?? name];
-                    }}
-                  />
-                  <Legend
-                    iconType="circle"
-                    iconSize={8}
-                    wrapperStyle={{ fontSize: "11px", color: C.gray, paddingBottom: "4px" }}
-                    formatter={(value: string) => {
-                      const labels: Record<string, string> = {
-                        forecast: "Original Forecast",
-                        actual: "Current Trajectory",
-                        simulated: "Simulated Recovery",
-                      };
-                      return labels[value] ?? value;
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="forecast"
-                    stroke={C.gray}
-                    strokeWidth={1.5}
-                    strokeDasharray="6 4"
-                    dot={false}
-                    activeDot={{ r: 4, strokeWidth: 0, fill: C.gray }}
-                    connectNulls
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="actual"
-                    stroke={C.red}
-                    strokeWidth={2.5}
-                    dot={{ r: 3, fill: C.red, strokeWidth: 0 }}
-                    activeDot={{ r: 5, strokeWidth: 0 }}
-                    connectNulls={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="simulated"
-                    stroke={C.success}
-                    strokeWidth={2}
-                    strokeDasharray="4 3"
-                    dot={false}
-                    activeDot={{ r: 4, strokeWidth: 0, fill: C.success }}
-                    connectNulls
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Summary callout */}
-            <div
-              style={{
-                marginTop: "12px",
-                padding: "10px 14px",
-                backgroundColor: "#F0FFF4",
-                border: "1px solid #C3E6CB",
-                borderRadius: "8px",
-              }}
-            >
-              <p style={{ fontSize: "11px", color: "#1A5C2A", margin: "0 0 4px 0", fontWeight: 700 }}>
-                Simulated outcome — combined actions
-              </p>
-              <p style={{ fontSize: "11px", color: "#2D6A3F", margin: 0, lineHeight: 1.5 }}>
-                Detailing increase + co-pay program closes FY gap to <strong>$0–$3M</strong>, bringing trajectory to <strong>$2.40B–$2.41B</strong> vs. $2.41B plan target.
-              </p>
-            </div>
-          </div>
         </div>
-      </div>
-    </DashboardLayout>
+      </main>
+    </div>
   );
 }
+
+const labelSt: React.CSSProperties = {
+  fontSize: 11, fontWeight: 600, color: '#646569',
+  textTransform: 'uppercase', letterSpacing: 0.5,
+};
+
+const valueSt: React.CSSProperties = {
+  fontSize: 26, fontWeight: 800, color: '#2D2D2D', marginTop: 5, lineHeight: 1,
+};
