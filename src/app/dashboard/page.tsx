@@ -80,33 +80,6 @@ const tableData = [
   },
 ];
 
-const events = [
-  {
-    label: "Competitor Launch — Sunlenca GenEq",
-    impact: "-2.1%",
-    color: "#C80037",
-    bg: "#FFF0F3",
-    positive: false,
-    date: "Mar 15, 2026",
-  },
-  {
-    label: "Formulary Win — Aetna",
-    impact: "+1.4%",
-    color: "#28A745",
-    bg: "#F0FFF4",
-    positive: true,
-    date: "Feb 28, 2026",
-  },
-  {
-    label: "Pricing Adjustment Q2",
-    impact: "+0.8%",
-    color: "#FFC107",
-    bg: "#FFFBF0",
-    positive: true,
-    date: "Jan 10, 2026",
-  },
-];
-
 // ─── Confidence Bar Component ────────────────────────────────────────────────
 
 function ConfidenceBar({ value }: { value: number }) {
@@ -309,8 +282,8 @@ export default function DashboardPage() {
         {/* ── Main Content Row ───────────────────────────────────────── */}
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
 
-          {/* Left — Line Chart (60%) */}
-          <div className="xl:col-span-3 bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+          {/* Forecast Trend Chart — full width */}
+          <div className="xl:col-span-5 bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-sm font-bold text-[#2D2D2D]">
@@ -402,71 +375,6 @@ export default function DashboardPage() {
             </ResponsiveContainer>
           </div>
 
-          {/* Right — Events Timeline (40%) */}
-          <div className="xl:col-span-2 bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-bold text-[#2D2D2D]">
-                Recent Events Applied
-              </h2>
-              <span className="text-[10px] bg-[#F5F5F5] text-[#646569] rounded-full px-2.5 py-1 font-semibold border border-gray-200">
-                3 events
-              </span>
-            </div>
-
-            <div className="relative flex flex-col gap-0 flex-1">
-              {/* Vertical line */}
-              <div className="absolute left-[13px] top-3 bottom-3 w-px bg-gray-200" />
-
-              {events.map((ev, i) => (
-                <div
-                  key={i}
-                  className="relative flex gap-3 group pb-5 last:pb-0"
-                >
-                  {/* Dot */}
-                  <div
-                    className="relative z-10 mt-0.5 w-7 h-7 rounded-full border-2 flex items-center justify-center flex-shrink-0 shadow-sm transition-transform duration-150 group-hover:scale-110"
-                    style={{
-                      borderColor: ev.color,
-                      backgroundColor: ev.bg,
-                    }}
-                  >
-                    <span
-                      className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: ev.color }}
-                    />
-                  </div>
-
-                  {/* Content */}
-                  <div
-                    className="flex-1 rounded-xl p-3 border transition-all duration-150 group-hover:shadow-sm cursor-default"
-                    style={{
-                      backgroundColor: ev.bg,
-                      borderColor: `${ev.color}28`,
-                    }}
-                  >
-                    <p className="text-xs font-semibold text-[#2D2D2D] leading-snug">
-                      {ev.label}
-                    </p>
-                    <div className="flex items-center justify-between mt-1.5">
-                      <span className="text-[10px] text-[#646569]">{ev.date}</span>
-                      <span
-                        className="text-xs font-bold"
-                        style={{ color: ev.color }}
-                      >
-                        {ev.impact}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-auto pt-4 border-t border-gray-100">
-              <button className="w-full text-xs font-semibold text-[#C80037] hover:text-[#A00029] transition-colors py-1.5 text-center">
-                View all events →
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* ── Market Snapshot Table ──────────────────────────────────── */}
