@@ -275,7 +275,7 @@ export default function PerformancePulse() {
                 />
                 <Tooltip content={<RecoveryTooltip />} />
                 <Line type="monotone" dataKey="plan" stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 3" dot={false} name="Annual Plan" />
-                <Line type="monotone" dataKey="actuals" stroke="#C80037" strokeWidth={2.5} dot={(p: { index: number; cx: number; cy: number }) => p.index <= 2 ? <circle key={p.index} cx={p.cx} cy={p.cy} r={3} fill="#C80037" /> : <g key={p.index} />} name="Actuals / Trajectory" />
+                <Line type="monotone" dataKey="actuals" stroke="#C80037" strokeWidth={2.5} dot={(p: { index?: number; cx?: number; cy?: number }) => { const i = p.index ?? 0; const x = p.cx ?? 0; const y = p.cy ?? 0; return i <= 2 ? <circle key={i} cx={x} cy={y} r={3} fill="#C80037" /> : <g key={i} />; }} name="Actuals / Trajectory" />
                 <Line type="monotone" dataKey="recovery" stroke="#28A745" strokeWidth={2.5} dot={false} name="Recovery Path" />
               </ComposedChart>
             </ResponsiveContainer>
