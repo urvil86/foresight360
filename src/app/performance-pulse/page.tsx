@@ -15,11 +15,6 @@ import {
   Cell,
   LabelList,
 } from "recharts";
-import {
-  TrendingDown,
-  AlertCircle,
-  Send,
-} from "lucide-react";
 
 // ── Recovery chart (cumulative monthly revenue, $M) ───────────────────────────
 // plan       = straight-line trajectory to $2.41B annual target
@@ -107,48 +102,6 @@ const DRIVERS = [
   },
 ];
 
-// ── What-If pre-built conversation ────────────────────────────────────────────
-const CHAT = [
-  {
-    role: "user",
-    text: "If we increase HCP detailing frequency by 20% in the underperforming Southern and Midwest territories for Q2–Q3, what happens to our full-year number?",
-  },
-  {
-    role: "ai",
-    text: "Increasing detailing frequency by 20% in Southern + Midwest is projected to recover 40–55% of the treatment-naive ramp gap.",
-    bullets: [
-      "Estimated recovery: +$3.2M to +$4.4M over Q2–Q3",
-      "Revised FY run rate: $2.37B (vs $2.34B current, vs $2.41B plan)",
-      "Remaining gap: $40M–$37M",
-      "Confidence: Medium — assumes rep capacity available.",
-    ],
-    note: "This alone won't close the gap. A co-pay card for ESI Tier 2 patients could add another $2M–$3M.",
-    actions: ["Model This as Scenario", "Add to Event Modeler", "See Assumptions"],
-  },
-  {
-    role: "user",
-    text: "What if we also run a 90-day co-pay assistance program for patients on Express Scripts plans?",
-  },
-  {
-    role: "ai",
-    text: "A 90-day co-pay card for ESI Tier 2 patients is modeled to offset 60–70% of the tier change impact.",
-    bullets: [
-      "Estimated recovery: +$3.6M to +$4.2M over Q2–Q3",
-      "Combined with detailing increase: FY run rate moves to $2.40B–$2.41B",
-      "Gap to forecast: effectively closed at midpoint estimate.",
-    ],
-    note: "Key risk: Gross-to-net impact reduces net revenue by ~$1.1M. Finance should model the net-net.",
-    actions: ["Build Combined Scenario", "Route to Finance for G2N Review", "Generate Action Brief"],
-  },
-];
-
-const QUICK_WHATS = [
-  "What if we win the CVS formulary slot in Q3?",
-  "What if competitor launch is delayed 6 months?",
-  "What if we increase WAC by 3% in July?",
-  "What if Southern region stockout recurs in Q3?",
-];
-
 const ROLES = ["All", "Marketing", "Sales / Field", "Market Access", "Finance", "Supply Chain"];
 
 function RecoveryTooltip({ active, payload, label }: { active?: boolean; payload?: { color: string; name: string; value: number }[]; label?: string }) {
@@ -188,7 +141,6 @@ function WaterfallTooltip({ active, payload, label }: { active?: boolean; payloa
 
 export default function PerformancePulse() {
   const [selectedRole, setSelectedRole] = useState("All");
-  const [chatInput, setChatInput] = useState("");
 
   return (
     <DashboardLayout breadcrumb={["Dashboard", "Performance Pulse"]}>
@@ -254,105 +206,41 @@ export default function PerformancePulse() {
           ))}
         </div>
 
-        {/* ── TOP: Recovery Chart (left 55%) + What-If Simulator (right 45%) ── */}
-        <div className="grid gap-4" style={{ gridTemplateColumns: "55% 45%" }}>
-
-          {/* Path to Forecast Recovery */}
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-            <div className="mb-4">
-              <h2 className="text-sm font-bold text-[#2D2D2D]">Path to Forecast Recovery</h2>
-              <p className="text-xs text-[#646569] mt-0.5">Cumulative revenue through Dec 2026 — three paths</p>
-            </div>
-            <ResponsiveContainer width="100%" height={270}>
-              <ComposedChart data={RECOVERY_DATA} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#646569" }} axisLine={false} tickLine={false} />
-                <YAxis
-                  domain={[0, 2600]}
-                  tick={{ fontSize: 11, fill: "#646569" }}
-                  axisLine={false} tickLine={false}
-                  tickFormatter={(v) => `$${(v / 1000).toFixed(1)}B`}
-                />
-                <Tooltip content={<RecoveryTooltip />} />
-                <Line type="monotone" dataKey="plan" stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 3" dot={false} name="Annual Plan" />
-                <Line type="monotone" dataKey="actuals" stroke="#C80037" strokeWidth={2.5} dot={(p: { index?: number; cx?: number; cy?: number }) => { const i = p.index ?? 0; const x = p.cx ?? 0; const y = p.cy ?? 0; return i <= 2 ? <circle key={i} cx={x} cy={y} r={3} fill="#C80037" /> : <g key={i} />; }} name="Actuals / Trajectory" />
-                <Line type="monotone" dataKey="recovery" stroke="#28A745" strokeWidth={2.5} dot={false} name="Recovery Path" />
-              </ComposedChart>
-            </ResponsiveContainer>
-            <div className="flex gap-5 mt-3 flex-wrap">
-              {[
-                { color: "#9ca3af", dash: true,  label: "Annual Plan ($2.41B)" },
-                { color: "#C80037", dash: false, label: "Actuals / Trajectory" },
-                { color: "#28A745", dash: false, label: "Recovery Path" },
-              ].map((l) => (
-                <div key={l.label} className="flex items-center gap-1.5">
-                  <svg width={22} height={10}>
-                    <line x1={0} y1={5} x2={22} y2={5} stroke={l.color} strokeWidth={2} strokeDasharray={l.dash ? "5 3" : undefined} />
-                  </svg>
-                  <span className="text-xs text-[#646569]">{l.label}</span>
-                </div>
-              ))}
-            </div>
+        {/* ── Path to Forecast Recovery — full width ── */}
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+          <div className="mb-4">
+            <h2 className="text-sm font-bold text-[#2D2D2D]">Path to Forecast Recovery</h2>
+            <p className="text-xs text-[#646569] mt-0.5">Cumulative revenue through Dec 2026 — three paths</p>
           </div>
-
-          {/* What-If Simulator */}
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col">
-            <div className="mb-3">
-              <h2 className="text-sm font-bold text-[#2D2D2D]">What-If Simulator</h2>
-              <p className="text-xs text-[#646569] mt-0.5">Explore which actions can recover the variance</p>
-            </div>
-
-            {/* Chat history */}
-            <div className="flex-1 overflow-y-auto flex flex-col gap-2.5 max-h-[300px] pr-1">
-              {CHAT.map((msg, i) => (
-                msg.role === "user" ? (
-                  <div key={i} className="self-end bg-[#F5F5F5] rounded-xl px-3 py-2 text-xs text-[#2D2D2D] max-w-[88%]">
-                    {msg.text}
-                  </div>
-                ) : (
-                  <div key={i} className="border-l-2 border-[#C80037] bg-[#FAFAFA] rounded-r-xl px-3 py-2.5 text-xs text-[#2D2D2D]">
-                    <p className="mb-1.5 leading-relaxed">{msg.text}</p>
-                    <ul className="list-disc pl-4 space-y-1 mb-2">
-                      {msg.bullets?.map((b, j) => <li key={j} className="leading-snug">{b}</li>)}
-                    </ul>
-                    {msg.note && <p className="text-[#646569] italic mb-2 leading-snug">{msg.note}</p>}
-                    <div className="flex flex-wrap gap-1.5">
-                      {msg.actions?.map((a) => (
-                        <button key={a} className="text-[10px] font-semibold text-[#C80037] bg-[#C80037]/8 border border-[#C80037]/20 rounded px-2 py-1 hover:bg-[#C80037]/15 transition-colors cursor-pointer">
-                          {a}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )
-              ))}
-            </div>
-
-            {/* Quick what-ifs */}
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {QUICK_WHATS.map((q) => (
-                <button
-                  key={q}
-                  onClick={() => setChatInput(q)}
-                  className="text-[10px] text-[#646569] bg-[#F5F5F5] border border-gray-200 rounded-full px-2.5 py-1 hover:border-gray-300 transition-colors"
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
-
-            {/* Input */}
-            <div className="flex items-center gap-2 mt-3">
-              <input
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Ask: 'If we do X, where do we land?'"
-                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-xs text-[#2D2D2D] outline-none focus:border-[#C80037] transition-colors"
+          <ResponsiveContainer width="100%" height={320}>
+            <ComposedChart data={RECOVERY_DATA} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#646569" }} axisLine={false} tickLine={false} />
+              <YAxis
+                domain={[0, 2600]}
+                tick={{ fontSize: 11, fill: "#646569" }}
+                axisLine={false} tickLine={false}
+                tickFormatter={(v) => `$${(v / 1000).toFixed(1)}B`}
               />
-              <button className="bg-[#C80037] hover:bg-[#A00029] rounded-lg p-2 transition-colors flex-shrink-0">
-                <Send size={13} className="text-white" />
-              </button>
-            </div>
+              <Tooltip content={<RecoveryTooltip />} />
+              <Line type="monotone" dataKey="plan" stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 3" dot={false} name="Annual Plan" />
+              <Line type="monotone" dataKey="actuals" stroke="#C80037" strokeWidth={2.5} dot={(p: { index?: number; cx?: number; cy?: number }) => { const i = p.index ?? 0; const x = p.cx ?? 0; const y = p.cy ?? 0; return i <= 2 ? <circle key={i} cx={x} cy={y} r={3} fill="#C80037" /> : <g key={i} />; }} name="Actuals / Trajectory" />
+              <Line type="monotone" dataKey="recovery" stroke="#28A745" strokeWidth={2.5} dot={false} name="Recovery Path" />
+            </ComposedChart>
+          </ResponsiveContainer>
+          <div className="flex gap-5 mt-3 flex-wrap">
+            {[
+              { color: "#9ca3af", dash: true,  label: "Annual Plan ($2.41B)" },
+              { color: "#C80037", dash: false, label: "Actuals / Trajectory" },
+              { color: "#28A745", dash: false, label: "Recovery Path" },
+            ].map((l) => (
+              <div key={l.label} className="flex items-center gap-1.5">
+                <svg width={22} height={10}>
+                  <line x1={0} y1={5} x2={22} y2={5} stroke={l.color} strokeWidth={2} strokeDasharray={l.dash ? "5 3" : undefined} />
+                </svg>
+                <span className="text-xs text-[#646569]">{l.label}</span>
+              </div>
+            ))}
           </div>
         </div>
 
