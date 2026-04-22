@@ -14,19 +14,22 @@ import {
 
 // ─── Sample Data ────────────────────────────────────────────────────────────
 
+// CI bands use σ·√t widening from last actual (Mar 2026).
+// Jan–Mar are actuals: zero-width band (low = high = adjusted).
+// Apr–Dec forecast: half-width = 1.96 × 5M × √(months ahead).
 const forecastData = [
-  { month: "Jan", baseline: 198, adjusted: 198, low: 190, high: 206 },
-  { month: "Feb", baseline: 202, adjusted: 204, low: 195, high: 213 },
-  { month: "Mar", baseline: 207, adjusted: 210, low: 201, high: 219 },
-  { month: "Apr", baseline: 210, adjusted: 208, low: 199, high: 217 },
-  { month: "May", baseline: 214, adjusted: 215, low: 205, high: 225 },
-  { month: "Jun", baseline: 218, adjusted: 220, low: 209, high: 231 },
-  { month: "Jul", baseline: 221, adjusted: 219, low: 208, high: 230 },
-  { month: "Aug", baseline: 225, adjusted: 228, low: 216, high: 240 },
-  { month: "Sep", baseline: 229, adjusted: 233, low: 220, high: 246 },
-  { month: "Oct", baseline: 233, adjusted: 237, low: 224, high: 250 },
-  { month: "Nov", baseline: 237, adjusted: 241, low: 228, high: 254 },
-  { month: "Dec", baseline: 241, adjusted: 246, low: 232, high: 260 },
+  { month: "Jan", baseline: 198, adjusted: 198, low: 198, high: 198 },
+  { month: "Feb", baseline: 202, adjusted: 204, low: 204, high: 204 },
+  { month: "Mar", baseline: 207, adjusted: 210, low: 210, high: 210 },
+  { month: "Apr", baseline: 210, adjusted: 208, low: 198, high: 218 },
+  { month: "May", baseline: 214, adjusted: 215, low: 201, high: 229 },
+  { month: "Jun", baseline: 218, adjusted: 220, low: 203, high: 237 },
+  { month: "Jul", baseline: 221, adjusted: 219, low: 199, high: 239 },
+  { month: "Aug", baseline: 225, adjusted: 228, low: 206, high: 250 },
+  { month: "Sep", baseline: 229, adjusted: 233, low: 209, high: 257 },
+  { month: "Oct", baseline: 233, adjusted: 237, low: 211, high: 263 },
+  { month: "Nov", baseline: 237, adjusted: 241, low: 213, high: 269 },
+  { month: "Dec", baseline: 241, adjusted: 246, low: 217, high: 275 },
 ];
 
 const tableData = [
@@ -126,27 +129,16 @@ function ConfidenceBar({ value }: { value: number }) {
 
 // ─── Circular Progress ───────────────────────────────────────────────────────
 
-function CircularProgress({ value }: { value: number }) {
+function CircularProgress({ value, color = "#C80037" }: { value: number; color?: string }) {
   const radius = 28;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (value / 100) * circumference;
   return (
     <svg width="72" height="72" className="-rotate-90">
+      <circle cx="36" cy="36" r={radius} fill="none" stroke="#E5E7EB" strokeWidth="6" />
       <circle
-        cx="36"
-        cy="36"
-        r={radius}
-        fill="none"
-        stroke="#E5E7EB"
-        strokeWidth="6"
-      />
-      <circle
-        cx="36"
-        cy="36"
-        r={radius}
-        fill="none"
-        stroke="#28A745"
-        strokeWidth="6"
+        cx="36" cy="36" r={radius} fill="none"
+        stroke={color} strokeWidth="6"
         strokeDasharray={circumference}
         strokeDashoffset={offset}
         strokeLinecap="round"
@@ -289,23 +281,25 @@ export default function DashboardPage() {
             </div>
           </KpiCard>
 
-          {/* Forecast Confidence */}
+          {/* Hit Probability */}
           <div
-            className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100
+            className="bg-white rounded-2xl p-5 shadow-sm border-t-[3px] border-gray-100
                        hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default"
+            style={{ borderTopColor: "#C80037" }}
           >
             <p className="text-xs font-semibold text-[#646569] uppercase tracking-wider mb-3">
-              Forecast Confidence
+              Hit Probability
             </p>
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-3xl font-bold text-[#2D2D2D] leading-none">87%</p>
-                <p className="text-xs text-[#28A745] mt-1.5 font-semibold">High confidence</p>
+                <p className="text-3xl font-bold text-[#2D2D2D] leading-none">92%</p>
+                <p className="text-xs text-[#646569] mt-1.5">to hit annual plan</p>
+                <p className="text-[10px] text-[#646569] mt-1 leading-tight">P(FY actuals ≥ $2.41B)</p>
               </div>
               <div className="relative flex items-center justify-center">
-                <CircularProgress value={87} />
-                <span className="absolute text-[11px] font-bold text-[#28A745]">
-                  87
+                <CircularProgress value={92} color="#C80037" />
+                <span className="absolute text-[11px] font-bold text-[#C80037]">
+                  92
                 </span>
               </div>
             </div>
